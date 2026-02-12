@@ -1,8 +1,11 @@
+import urllib.request
+import tempfile
 import threading
 
 from PySide6.QtWidgets import (
     QWidget,
     QVBoxLayout,
+    QHBoxLayout,
     QLineEdit,
     QPushButton,
     QLabel,
@@ -10,13 +13,17 @@ from PySide6.QtWidgets import (
     QProgressBar,
     QFileDialog,
     QMessageBox,
+    QListWidget,
 )
-from PySide6.QtCore import QObject, Signal, QTimer
+from PySide6.QtGui import QPixmap
+from PySide6.QtCore import Qt, QObject, Signal, QTimer
 
 from downloader.download import download_video, get_video_info
+from downloader.queue_manager import DownloadQueueManager
 from settings import load_settings, save_settings
 from history import add_history_entry
 from ui.history_window import HistoryWindow
+from ui.theme import DARK_THEME
 
 
 # ---------------- Signals ----------------
@@ -24,34 +31,85 @@ class ProgressSignals(QObject):
     progress = Signal(float)
     status = Signal(str)
     error = Signal(str)
-
+    thumbnail = Signal(QPixmap)
 
 # ---------------- Main Window ----------------
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
+        self.setWindowTitle("Yui - Video Downloader")
+        self.resize(1600, 900)
 
-        self.setWindowTitle("Video Downloader")
-        self.resize(500, 300)
-
+        # ----- settings -----
         self.settings = load_settings()
         self.download_path = self.settings.get("download_path", "downloads")
 
+        # ----- signals -----
         self.signals = ProgressSignals()
         self.signals.progress.connect(self.update_progress)
         self.signals.status.connect(self.update_status)
         self.signals.error.connect(self.show_error)
 
-        layout = QVBoxLayout()
+        # ----- background -----
+        self.bg_label = QLabel(self)
+        self.bg_label.setScaledContents(True)
+        self.bg_label.lower()
+
+        pixmap = QPixmap("assets/bg.jpg")
+        self.bg_label.setPixmap(pixmap)
+        
+        # ----- panel -----
+        self.panel = QWidget(self)
+
+        # panel background only
+        self.panel.setStyleSheet("""
+            QWidget {
+                background-color: rgba(20, 20, 25, 190);
+                border-radius: 12px;
+            }
+        """)
+
+        # load theme file
+        with open("ui/themes/dark.qss", "r") as f:
+            self.panel.setStyleSheet(
+                self.panel.styleSheet() + f.read()
+            )
+
+        # ----- Root layout -----
+        root_layout = QHBoxLayout(self)
+        root_layout.setContentsMargins(0, 0, 0, 0)
+        root_layout.addStretch()
+        root_layout.addWidget(self.panel)
+        root_layout.addSpacing(40)
+
+        # ----- layout on panel -----
+        layout = QVBoxLayout(self.panel)
 
         # URL input
         self.url_input = QLineEdit()
         self.url_input.setPlaceholderText("Paste video URL here")
         layout.addWidget(self.url_input)
 
+        # Thumbnail
+        self.thumbnail_label = QLabel()
+        self.thumbnail_label.setFixedSize(320, 180)
+        self.thumbnail_label.setAlignment(Qt.AlignCenter)
+        layout.addWidget(self.thumbnail_label)
+        self.signals.thumbnail.connect(self.thumbnail_label.setPixmap)
+
         # Title label
         self.title_label = QLabel("Video: -")
         layout.addWidget(self.title_label)
+
+        # Queue List
+        self.queue_list = QListWidget()
+        layout.addWidget(self.queue_list)
+
+        # Queue Manager -----
+        self.queue_manager = DownloadQueueManager(
+            self.signals,
+            self.update_queue_ui
+        )
 
         # Format selector
         self.format_box = QComboBox()
@@ -78,8 +136,6 @@ class MainWindow(QWidget):
         self.status_label = QLabel("Idle")
         layout.addWidget(self.status_label)
 
-        self.setLayout(layout)
-
         # Connections
         self.download_btn.clicked.connect(self.start_download)
         self.folder_btn.clicked.connect(self.choose_folder)
@@ -92,6 +148,19 @@ class MainWindow(QWidget):
 
         self.url_input.textChanged.connect(self.schedule_info_fetch)
 
+    # ---------------- Resize background ----------------
+    def resizeEvent(self, event):
+        self.bg_label.resize(self.size())
+        super().resizeEvent(event)
+
+    # ---------------- Update queue UI ----------------
+    def update_queue_ui(self, status, title):
+        if status == "Queued":
+            self.queue_list.addItem(f"Queued: {title}")
+
+        elif status == "Starting":
+            self.queue_list.addItem(f"Downloading: {title}")
+    
     # ---------------- Folder selection ----------------
     def choose_folder(self):
         folder = QFileDialog.getExistingDirectory(self, "Select Folder")
@@ -140,6 +209,7 @@ class MainWindow(QWidget):
 
         if "youtube.com" not in text and "youtu.be" not in text:
             self.title_label.setText("Video: -")
+            self.thumbnail_label.clear()
             return
 
         if not self.download_btn.isEnabled():
@@ -158,6 +228,22 @@ class MainWindow(QWidget):
         def run():
             try:
                 info = get_video_info(url)
+                thumb_url = info.get("thumbnail")
+
+                if thumb_url:
+                    tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".jpg")
+                    urllib.request.urlretrieve(thumb_url, tmp_file.name)
+
+                    pixmap = QPixmap(tmp_file.name)
+
+                    if not pixmap.isNull():
+                        scaled = pixmap.scaled(
+                            320, 180,
+                            Qt.KeepAspectRatio,
+                            Qt.SmoothTransformation
+                        )
+
+                        self.signals.thumbnail.emit(scaled)
 
                 if info.get("_type") == "playlist":
                     entries = info.get("entries") or []
@@ -192,24 +278,9 @@ class MainWindow(QWidget):
 
         def run():
             try:
-                download_video(
-                    url,
-                    self.download_path,
-                    fmt,
-                    progress_callback=self.signals.progress.emit,
-                    status_callback=self.signals.status.emit,
-                    finished_callback=self.on_video_finished,
-                )
-
-                # info = get_video_info(url)
-                # title = info.get("title", "Unknown")
-
-                # add_history_entry(
-                #     title,
-                #     url,
-                #     fmt,d
-                #     self.download_path,
-                # )
+                self.queue_manager.add(
+                    url, self.download_path, fmt
+                    )    
 
                 self.signals.status.emit("Download complete")
 
