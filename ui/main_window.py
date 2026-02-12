@@ -90,39 +90,47 @@ class MainWindow(QWidget):
         self.url_input.setPlaceholderText("Paste video URL here")
         layout.addWidget(self.url_input)
 
-        # Thumbnail
+        # ----- Title label -----
+        self.title_label = QLabel("Video: -")
+
+        # ----- Thumbnail -----
         self.thumbnail_label = QLabel()
         self.thumbnail_label.setFixedSize(320, 180)
         self.thumbnail_label.setAlignment(Qt.AlignCenter)
-        layout.addWidget(self.thumbnail_label)
+
+        preview_layout = QHBoxLayout()
+        preview_layout.addWidget(self.thumbnail_label)
+        preview_layout.addWidget(self.title_label)
+
+        layout.addLayout(preview_layout)
+
         self.signals.thumbnail.connect(self.thumbnail_label.setPixmap)
 
-        # Title label
-        self.title_label = QLabel("Video: -")
-        layout.addWidget(self.title_label)
-
-        # Queue List
+        # ----- Queue List -----
         self.queue_list = QListWidget()
-        layout.addWidget(self.queue_list)
+        layout.addWidget(self.queue_list, stretch=1)
 
-        # Queue Manager -----
+        # ----- Queue Manager -----
         self.queue_manager = DownloadQueueManager(
             self.signals,
             self.update_queue_ui
         )
 
-        # Format selector
+        # ----- Format selector -----
         self.format_box = QComboBox()
         self.format_box.addItems(["mp4", "mkv", "mp3"])
         layout.addWidget(self.format_box)
 
-        # Folder selection
-        self.folder_btn = QPushButton("Choose Download Folder")
-        layout.addWidget(self.folder_btn)
+        # ----- Folder + History buttons -----
+        buttons_layout = QHBoxLayout()
 
-        # History button
+        self.folder_btn = QPushButton("Choose Download Folder")
+        buttons_layout.addWidget(self.folder_btn)
+
         self.history_btn = QPushButton("History")
-        layout.addWidget(self.history_btn)
+        buttons_layout.addWidget(self.history_btn)
+
+        layout.addLayout(buttons_layout)
 
         # Download button
         self.download_btn = QPushButton("Download")
