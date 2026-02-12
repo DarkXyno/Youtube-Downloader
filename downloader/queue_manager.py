@@ -4,19 +4,21 @@ from downloader.download import download_video
 from downloader.download import get_video_info
 
 class DownloadQueueManager:
-    def __init__(self, signals, ui_callback):
+    def __init__(self, signals):
         self.queue = Queue()
         self.signals = signals
-        self.ui_callback = ui_callback
         self.is_downloading = False
 
     def add(self, url, output_path, format_type):
         """ADD ITEM TO QUEUE AND START IF IDLE."""
-        info = get_video_info(url)
-        title = info.get("title", url)
+        try:
+            info = get_video_info(url)
+            title = info.get("title", url)
+        except Exception as e:
+            title = url
 
         self.queue.put((url, output_path, format_type, title))
-        self.ui_callback("Queued", title)
+        self.signals.queue_update.emit("Queued", title)
 
         if not self.is_downloading:
             self._start_next()
@@ -31,23 +33,25 @@ class DownloadQueueManager:
 
         url, output_path, format_type, title = self.queue.get()
 
-        self.ui_callback("Starting", title)
+        self.signals.queue_update.emit("Starting", title)
 
         thread = threading.Thread(
             target=self._download_worker,
-            args=(url, output_path, format_type),
+            args=(url, output_path, format_type, title),
             daemon=True
         )
         thread.start()
 
-    def _download_worker(self, url, output_path, format_type): 
-        try: download_video( 
-            url, 
-            output_path, 
-            format_type, 
-            progress_callback=self.signals.progress.emit) 
-            
-        except Exception as e: 
+    def _download_worker(self, url, output_path, format_type, title):
+        try:
+            download_video(
+                url,
+                output_path,
+                format_type,
+                progress_callback=lambda p:self.signals.progress.emit(title, p),
+            )
+
+        except Exception as e:
             self.signals.status.emit(f"Error: {str(e)}")
 
         finally:

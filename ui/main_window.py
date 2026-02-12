@@ -14,6 +14,7 @@ from PySide6.QtWidgets import (
     QFileDialog,
     QMessageBox,
     QListWidget,
+    QListWidgetItem,
 )
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt, QObject, Signal, QTimer
@@ -24,14 +25,16 @@ from settings import load_settings, save_settings
 from history import add_history_entry
 from ui.history_window import HistoryWindow
 from ui.theme import DARK_THEME
+from ui.queue_item import QueueItemWidget
 
 
 # ---------------- Signals ----------------
 class ProgressSignals(QObject):
-    progress = Signal(float)
+    progress = Signal(str, float)
     status = Signal(str)
     error = Signal(str)
     thumbnail = Signal(QPixmap)
+    queue_update = Signal(str, str) # status, title
 
 # ---------------- Main Window ----------------
 class MainWindow(QWidget):
@@ -49,6 +52,7 @@ class MainWindow(QWidget):
         self.signals.progress.connect(self.update_progress)
         self.signals.status.connect(self.update_status)
         self.signals.error.connect(self.show_error)
+        self.signals.queue_update.connect(self.update_queue_ui)
 
         # ----- background -----
         self.bg_label = QLabel(self)
@@ -109,12 +113,10 @@ class MainWindow(QWidget):
         # ----- Queue List -----
         self.queue_list = QListWidget()
         layout.addWidget(self.queue_list, stretch=1)
+        self.queue_widgets = {}
 
         # ----- Queue Manager -----
-        self.queue_manager = DownloadQueueManager(
-            self.signals,
-            self.update_queue_ui
-        )
+        self.queue_manager = DownloadQueueManager(self.signals)
 
         # ----- Format selector -----
         self.format_box = QComboBox()
@@ -164,10 +166,20 @@ class MainWindow(QWidget):
     # ---------------- Update queue UI ----------------
     def update_queue_ui(self, status, title):
         if status == "Queued":
-            self.queue_list.addItem(f"Queued: {title}")
+            widget = QueueItemWidget(title)
+
+            item = QListWidgetItem(self.queue_list)
+            item.setSizeHint(widget.sizeHint())
+
+            self.queue_list.addItem(item)
+            self.queue_list.setItemWidget(item, widget)
+
+            self.queue_widgets[title] = widget
 
         elif status == "Starting":
-            self.queue_list.addItem(f"Downloading: {title}")
+            widget = self.queue_widgets.get(title)
+            if widget:
+                widget.set_status(f"Downloading: {title}")
     
     # ---------------- Folder selection ----------------
     def choose_folder(self):
@@ -184,7 +196,12 @@ class MainWindow(QWidget):
         self.history_window.show()
 
     # ---------------- Progress updates ----------------
-    def update_progress(self, value):
+    def update_progress(self, title, value):
+        widget = self.queue_widgets.get(title)
+
+        if widget:
+            widget.set_progress(value)
+
         self.progress_bar.setValue(int(value))
 
     def update_status(self, text):
@@ -224,7 +241,7 @@ class MainWindow(QWidget):
             return
 
         self.title_label.setText("Fetching info...")
-        self.info_timer.start(600)
+        self.info_timer.start(200)
 
     # ---------------- Fetch metadata ----------------
     def fetch_video_info(self):
