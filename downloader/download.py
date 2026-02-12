@@ -31,6 +31,7 @@ def download_video(
     format_type="mp4",
     progress_callback=None,
     status_callback=None,
+    finished_callback=None,
 ):
     Path(output_path).mkdir(exist_ok=True)
 
@@ -54,8 +55,18 @@ def download_video(
                     f"Downloading video {index} / {total_entries}"
                 )
 
-        if progress_callback and d["status"] == "finished":
-            progress_callback(100)
+        if d["status"] == "finished":
+            progress_callback and progress_callback(100)
+
+            #Log individual playlist entries
+            info = d.get("info_dict", {})
+            title = info.get("title")
+
+            playlist = info.get("playlist")
+            playlist_index = info.get("playlist_index")
+
+            if finished_callback and title:
+                finished_callback(title, playlist, playlist_index)
 
     ydl_opts = {
         "outtmpl": f"{output_path}/%(title)s.%(ext)s",

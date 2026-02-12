@@ -113,6 +113,23 @@ class MainWindow(QWidget):
     def update_status(self, text):
         self.status_label.setText(text)
 
+    # ---------------- Download finished callback ----------------
+    def on_video_finished(self, title, playlist, index):
+        url = self.url_input.text().strip()
+        fmt = self.format_box.currentText()
+
+        if playlist:
+            display_title = f"{playlist} → {title}"
+        else:
+            display_title = title
+
+        add_history_entry(
+            display_title,
+            url,
+            fmt,
+            self.download_path,
+        )
+
     # ---------------- Error popup ----------------
     def show_error(self, message):
         QMessageBox.critical(self, "Download Error", message)
@@ -181,17 +198,18 @@ class MainWindow(QWidget):
                     fmt,
                     progress_callback=self.signals.progress.emit,
                     status_callback=self.signals.status.emit,
+                    finished_callback=self.on_video_finished,
                 )
 
-                info = get_video_info(url)
-                title = info.get("title", "Unknown")
+                # info = get_video_info(url)
+                # title = info.get("title", "Unknown")
 
-                add_history_entry(
-                    title,
-                    url,
-                    fmt,
-                    self.download_path,
-                )
+                # add_history_entry(
+                #     title,
+                #     url,
+                #     fmt,d
+                #     self.download_path,
+                # )
 
                 self.signals.status.emit("Download complete")
 

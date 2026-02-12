@@ -9,3 +9,5 @@ __pycache__/
 history.json
 .dist
 downloads/
+.history
+config.json
