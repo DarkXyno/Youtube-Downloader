@@ -15,6 +15,8 @@ from PySide6.QtWidgets import (
     QMessageBox,
     QListWidget,
     QListWidgetItem,
+    QTreeView,
+    QFileSystemModel,
 )
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt, QObject, Signal, QTimer
@@ -41,27 +43,82 @@ class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
         self.setWindowTitle("Yui - Video Downloader")
-        self.resize(1600, 900)
+        self.setFixedSize(1600, 900)
 
-        # ----- settings -----
+        # ----- Toolbar (geometry-based) -----
+        self.toolbar = QWidget(self)
+        self.toolbar.setGeometry(0, 0, 800, 40)
+
+        toolbar_layout = QHBoxLayout(self.toolbar)
+        toolbar_layout.setContentsMargins(10, 5, 10, 5)
+
+        # Toolbar background
+        self.toolbar.setStyleSheet("""
+            QWidget {
+                background-color: rgba(20, 20, 25, 200);
+                border-radius: 12px;
+            }
+
+            QPushButton {
+                color: #ddd;
+                background: transparent;
+                border: none;
+                padding: 6px 12px;
+            }
+
+            QPushButton:hover {
+                background: rgba(255, 255, 255, 40);
+                border-radius: 6px;
+            }
+            """)
+
+        self.toggle_files_btn = QPushButton("Downloads")
+        toolbar_layout.addWidget(self.toggle_files_btn)
+
+        self.change_bg_btn = QPushButton("Change Background")
+        toolbar_layout.addWidget(self.change_bg_btn)
+        self.change_bg_btn.clicked.connect(self.change_background)
+
+        toolbar_layout.addStretch()
+
+        # Toggle file panel visibility
+        self.toggle_files_btn.clicked.connect(
+            lambda: self.file_panel.setVisible(
+                not self.file_panel.isVisible()
+            )
+        )
+
+        # Settings
         self.settings = load_settings()
         self.download_path = self.settings.get("download_path", "downloads")
 
-        # ----- signals -----
+        # Signals
         self.signals = ProgressSignals()
         self.signals.progress.connect(self.update_progress)
         self.signals.status.connect(self.update_status)
         self.signals.error.connect(self.show_error)
         self.signals.queue_update.connect(self.update_queue_ui)
 
-        # ----- background -----
+        # Backgroud
         self.bg_label = QLabel(self)
         self.bg_label.setScaledContents(True)
         self.bg_label.lower()
-
-        pixmap = QPixmap("assets/bg.jpg")
+        
+        bg_path = self.settings.get("background", "assets/bg.jpg")
+        pixmap = QPixmap(bg_path)
         self.bg_label.setPixmap(pixmap)
         
+        # Download folder view 
+        self.file_model = QFileSystemModel()
+        self.file_model.setRootPath("")
+
+        self.file_view = QTreeView()
+        self.file_view.setModel(self.file_model)
+        self.file_view.setRootIndex(
+            self.file_model.index(self.download_path)
+        )
+        self.file_view.setMaximumWidth(400)
+
         # ----- panel -----
         self.panel = QWidget(self)
 
@@ -73,21 +130,45 @@ class MainWindow(QWidget):
             }
         """)
 
+        # file panel
+        self.file_panel = QWidget(self)
+
+        self.file_panel.setStyleSheet("""
+            QWidget {
+                background-color: rgba(20, 20, 25, 190);
+                border-radius: 12px;}
+            """)
+        
+        with open("ui/themes/dark.qss", "r") as f:
+            self.file_panel.setStyleSheet(
+                self.file_panel.styleSheet() + f.read()
+            )
+
         # load theme file
         with open("ui/themes/dark.qss", "r") as f:
             self.panel.setStyleSheet(
                 self.panel.styleSheet() + f.read()
             )
 
-        # ----- Root layout -----
-        root_layout = QHBoxLayout(self)
-        root_layout.setContentsMargins(0, 0, 0, 0)
-        root_layout.addStretch()
-        root_layout.addWidget(self.panel)
-        root_layout.addSpacing(40)
-
         # ----- layout on panel -----
         layout = QVBoxLayout(self.panel)
+
+        # layout on file panel
+        file_layout = QVBoxLayout(self.file_panel)
+
+        self.file_model = QFileSystemModel()
+        self.file_model.setRootPath("")
+
+        self.file_view = QTreeView()
+        self.file_view.setModel(self.file_model)
+        self.file_view.setRootIndex(
+            self.file_model.index(self.download_path)
+        )
+
+        file_layout.addWidget(self.file_view)
+
+        self.panel.setGeometry(800, 0, 800, 900)
+        self.file_panel.setGeometry(80, 80, 600, 700)
 
         # URL input
         self.url_input = QLineEdit()
@@ -163,6 +244,21 @@ class MainWindow(QWidget):
         self.bg_label.resize(self.size())
         super().resizeEvent(event)
 
+    # ---------------- Change background ----------------
+    def change_background(self):
+        file, _ = QFileDialog.getOpenFileName(
+            self, "Select background", 
+            "",
+            "Images (*.png *.jpg *.jpeg *.JPG *.JPEG *.PNG);;All Files (*)"
+        )
+
+        if file:
+            self.settings["background"] = file
+            save_settings(self.settings)
+
+            pixmap = QPixmap(file)
+            self.bg_label.setPixmap(pixmap)
+
     # ---------------- Update queue UI ----------------
     def update_queue_ui(self, status, title):
         if status == "Queued":
@@ -189,6 +285,8 @@ class MainWindow(QWidget):
             self.download_path = folder
             self.settings["download_path"] = folder
             save_settings(self.settings)
+
+            self.file_view.setRootIndex(self.file_model.index(folder))
 
     # ---------------- History ----------------
     def show_history(self):

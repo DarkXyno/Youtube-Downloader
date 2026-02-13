@@ -24,6 +24,14 @@ QPushButton:hover {
     background-color: rgba(0, 200, 230, 200);
 }
 
+/* Header for Downloads folder */
+QHeaderView::section {
+    background-color: rgba(30, 30, 40, 200);
+    color: #ddd;
+    border: none;
+    border-bottom: 1px solid rgba(255,255,255,40);
+}
+
 /* Progress */
 QProgressBar {
     background-color: rgba(255,255,255,30);
@@ -34,4 +42,23 @@ QProgressBar {
 QProgressBar::chunk {
     background-color: rgb(0, 200, 230);
     border-radius: 6px;
+}
+
+/* Toolbar  */
+QTreeView {
+    background-color: rgba(30, 30, 40, 200);
+    color: #ddd;
+    border: none;
+}
+
+QTreeView::item {
+    color: #ddd;
+}
+
+QTreeView::item:selected {
+    background: rgba(100, 150, 255, 120);
+}
+
+QTreeView::item:hover {
+    background: rgba(255, 255, 255, 30);
 }
