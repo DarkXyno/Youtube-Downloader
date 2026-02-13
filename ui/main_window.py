@@ -1,6 +1,8 @@
 import urllib.request
 import tempfile
 import threading
+import os
+import subprocess
 
 from PySide6.QtWidgets import (
     QWidget,
@@ -21,7 +23,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QPixmap
 from PySide6.QtCore import Qt, QObject, Signal, QTimer
 
-from downloader.download import download_video, get_video_info
+from downloader.download import get_video_info
 from downloader.queue_manager import DownloadQueueManager
 from settings import load_settings, save_settings
 from history import add_history_entry
@@ -123,6 +125,9 @@ class MainWindow(QWidget):
         )
         self.file_view.setMaximumWidth(400)
 
+        #double click to open file location
+        self.file_view.doubleClicked.connect(self.open_selected_file)
+
         # ----- panel -----
         self.panel = QWidget(self)
 
@@ -178,6 +183,10 @@ class MainWindow(QWidget):
         file_layout.addWidget(self.history_list)
         self.history_list.hide()
 
+        self.history_list.itemDoubleClicked.connect(
+            self.open_history_location
+        )
+
         # URL input
         self.url_input = QLineEdit()
         self.url_input.setPlaceholderText("Paste video URL here")
@@ -218,7 +227,7 @@ class MainWindow(QWidget):
         self.folder_btn = QPushButton("Choose Download Folder")
         buttons_layout.addWidget(self.folder_btn)
 
-        self.history_btn = QPushButton("History")
+        self.history_btn = QPushButton("Open Folder")
         buttons_layout.addWidget(self.history_btn)
 
         layout.addLayout(buttons_layout)
@@ -238,7 +247,7 @@ class MainWindow(QWidget):
         # Connections
         self.download_btn.clicked.connect(self.start_download)
         self.folder_btn.clicked.connect(self.choose_folder)
-        self.history_btn.clicked.connect(self.show_history)
+        self.history_btn.clicked.connect(self.open_download_folder)
 
         # Auto info fetch timer
         self.info_timer = QTimer()
@@ -324,6 +333,30 @@ class MainWindow(QWidget):
             }
         """)
 
+    def open_history_location(self, item):
+        history = load_history()
+        row = self.historu_list.row(item)
+
+        if row >= len(history):
+            return
+
+        entry = history[::-1][row] #reverse order
+
+        path = entry.get("path")
+        if not path:
+            return
+        
+        folder = os.path.dirname(path)
+
+        if os.path.exists(folder):
+            subprocess.Popen(f'explorer "{folder}"')
+
+    def open_selected_file(self, index):
+        path = self.file_model.filePath(index)
+
+        if os.path.isfile(path):
+            os.startfile(path)
+
     def populate_history(self):
         self.history_list.clear()
 
@@ -331,6 +364,11 @@ class MainWindow(QWidget):
         for item in history:
             text = f"{item['title']} ({item['format']})"
             self.history_list.addItem(text)
+
+    # Open download folder
+    def open_download_folder(self):
+        if os.path.exists(self.download_path):
+            os.startfile(self.download_path)
 
     # ---------------- Progress updates ----------------
     def update_progress(self, title, value):
