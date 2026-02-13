@@ -21,7 +21,7 @@ from PySide6.QtWidgets import (
     QFileSystemModel,
 )
 from PySide6.QtGui import QPixmap
-from PySide6.QtCore import Qt, QObject, Signal, QTimer
+from PySide6.QtCore import Qt, QObject, Signal, QTimer, QPropertyAnimation, QRect
 
 from downloader.download import get_video_info
 from downloader.queue_manager import DownloadQueueManager
@@ -79,9 +79,9 @@ class MainWindow(QWidget):
         toolbar_layout.addWidget(self.toggle_files_btn)
         self.toggle_files_btn.clicked.connect(self.show_downloads)
 
-        self.history_btn = QPushButton("History")
-        toolbar_layout.addWidget(self.history_btn)
-        self.history_btn.clicked.connect(self.show_history_panel)
+        self.toolbar_history_btn = QPushButton("History")
+        toolbar_layout.addWidget(self.toolbar_history_btn)
+        self.toolbar_history_btn.clicked.connect(self.show_history_panel)
 
         self.change_bg_btn = QPushButton("Change Background")
         toolbar_layout.addWidget(self.change_bg_btn)
@@ -227,8 +227,8 @@ class MainWindow(QWidget):
         self.folder_btn = QPushButton("Choose Download Folder")
         buttons_layout.addWidget(self.folder_btn)
 
-        self.history_btn = QPushButton("Open Folder")
-        buttons_layout.addWidget(self.history_btn)
+        self.open_folder_btn = QPushButton("Open Folder")
+        buttons_layout.addWidget(self.open_folder_btn)
 
         layout.addLayout(buttons_layout)
 
@@ -247,7 +247,7 @@ class MainWindow(QWidget):
         # Connections
         self.download_btn.clicked.connect(self.start_download)
         self.folder_btn.clicked.connect(self.choose_folder)
-        self.history_btn.clicked.connect(self.open_download_folder)
+        self.open_folder_btn.clicked.connect(self.open_download_folder)
 
         # Auto info fetch timer
         self.info_timer = QTimer()
@@ -312,18 +312,20 @@ class MainWindow(QWidget):
 
     # Show downloads
     def show_downloads(self):
-        self.file_view.show()
         self.history_list.hide()
+        self.file_view.show()
         self._highlight_toolbar(self.toggle_files_btn)
 
     def show_history_panel(self):
         self.file_view.hide()
         self.history_list.show()
         self.populate_history()
-        self._highlight_toolbar(self.history_btn)
+        self._highlight_toolbar(self.toolbar_history_btn)
 
     def _highlight_toolbar(self, active_btn):
-        for btn in [self.toggle_files_btn, self.history_btn]:
+        buttons = [self.toggle_files_btn, self.toolbar_history_btn]
+
+        for btn in buttons:
             btn.setStyleSheet("")
 
         active_btn.setStyleSheet("""
@@ -335,7 +337,7 @@ class MainWindow(QWidget):
 
     def open_history_location(self, item):
         history = load_history()
-        row = self.historu_list.row(item)
+        row = self.history_list.row(item)
 
         if row >= len(history):
             return
