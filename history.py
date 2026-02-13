@@ -1,8 +1,18 @@
+import os
+import sys
 import json
 from pathlib import Path
 from datetime import datetime
 
 HISTORY_FILE = Path("history.json")
+
+# 
+def app_dir():
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(sys.executable)
+    return os.path.dirname(os.path.abspath(__file__))
+
+HISTORY_FILE = Path(app_dir()) / "history.json"
 
 
 # -------------------------------

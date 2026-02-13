@@ -51,6 +51,7 @@ class DownloadQueueManager:
                 progress_callback=lambda p:self.signals.progress.emit(title, p),
             )
 
+            self.signals.finished.emit(title, None, None)
         except Exception as e:
             self.signals.status.emit(f"Error: {str(e)}")
 

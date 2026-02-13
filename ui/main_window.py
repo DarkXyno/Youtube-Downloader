@@ -1,6 +1,7 @@
 import urllib.request
 import tempfile
 import threading
+import sys
 import os
 import subprocess
 
@@ -20,7 +21,7 @@ from PySide6.QtWidgets import (
     QTreeView,
     QFileSystemModel,
 )
-from PySide6.QtGui import QPixmap
+from PySide6.QtGui import QPixmap, QIcon
 from PySide6.QtCore import Qt, QObject, Signal, QTimer, QPropertyAnimation, QRect
 
 from downloader.download import get_video_info
@@ -32,6 +33,15 @@ from ui.theme import DARK_THEME
 from ui.queue_item import QueueItemWidget
 from history import load_history
 
+def resource_path(relative_path):
+    """Get absolute path to resource, works for dev and PyInstaller."""
+    try:
+        base_path = sys._MEIPASS
+    except AttributeError:
+        base_path = os.path.abspath(".")
+    
+    return os.path.join(base_path, relative_path)
+
 
 # ---------------- Signals ----------------
 class ProgressSignals(QObject):
@@ -40,11 +50,14 @@ class ProgressSignals(QObject):
     error = Signal(str)
     thumbnail = Signal(QPixmap)
     queue_update = Signal(str, str) # status, title
+    finished = Signal(str, object, object) # title, playlist, index
 
 # ---------------- Main Window ----------------
 class MainWindow(QWidget):
     def __init__(self):
         super().__init__()
+
+        self.setWindowIcon(QIcon(resource_path("assets/Yui.ico")))
         self.setWindowTitle("Yui - Video Downloader")
         self.setFixedSize(1600, 900)
 
@@ -104,6 +117,7 @@ class MainWindow(QWidget):
         self.signals.status.connect(self.update_status)
         self.signals.error.connect(self.show_error)
         self.signals.queue_update.connect(self.update_queue_ui)
+        self.signals.finished.connect(self.on_video_finished)
 
         # Backgroud
         self.bg_label = QLabel(self)
@@ -111,7 +125,7 @@ class MainWindow(QWidget):
         self.bg_label.lower()
 
         bg_path = self.settings.get("background", "assets/bg.jpg")
-        pixmap = QPixmap(bg_path)
+        pixmap = QPixmap(resource_path(bg_path))
         self.bg_label.setPixmap(pixmap)
         
         # Download folder view 
@@ -148,13 +162,13 @@ class MainWindow(QWidget):
                 border-radius: 12px;}
             """)
         
-        with open("ui/themes/dark.qss", "r") as f:
+        with open(resource_path("ui/themes/dark.qss"), "r") as f:
             self.file_panel.setStyleSheet(
                 self.file_panel.styleSheet() + f.read()
             )
 
         # load theme file
-        with open("ui/themes/dark.qss", "r") as f:
+        with open(resource_path("ui/themes/dark.qss"), "r") as f:
             self.panel.setStyleSheet(
                 self.panel.styleSheet() + f.read()
             )
