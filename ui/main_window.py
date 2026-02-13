@@ -28,6 +28,7 @@ from history import add_history_entry
 from ui.history_window import HistoryWindow
 from ui.theme import DARK_THEME
 from ui.queue_item import QueueItemWidget
+from history import load_history
 
 
 # ---------------- Signals ----------------
@@ -74,6 +75,11 @@ class MainWindow(QWidget):
 
         self.toggle_files_btn = QPushButton("Downloads")
         toolbar_layout.addWidget(self.toggle_files_btn)
+        self.toggle_files_btn.clicked.connect(self.show_downloads)
+
+        self.history_btn = QPushButton("History")
+        toolbar_layout.addWidget(self.history_btn)
+        self.history_btn.clicked.connect(self.show_history_panel)
 
         self.change_bg_btn = QPushButton("Change Background")
         toolbar_layout.addWidget(self.change_bg_btn)
@@ -83,9 +89,7 @@ class MainWindow(QWidget):
 
         # Toggle file panel visibility
         self.toggle_files_btn.clicked.connect(
-            lambda: self.file_panel.setVisible(
-                not self.file_panel.isVisible()
-            )
+            self.show_downloads
         )
 
         # Settings
@@ -103,7 +107,7 @@ class MainWindow(QWidget):
         self.bg_label = QLabel(self)
         self.bg_label.setScaledContents(True)
         self.bg_label.lower()
-        
+
         bg_path = self.settings.get("background", "assets/bg.jpg")
         pixmap = QPixmap(bg_path)
         self.bg_label.setPixmap(pixmap)
@@ -169,6 +173,10 @@ class MainWindow(QWidget):
 
         self.panel.setGeometry(800, 0, 800, 900)
         self.file_panel.setGeometry(80, 80, 600, 700)
+
+        self.history_list = QListWidget()
+        file_layout.addWidget(self.history_list)
+        self.history_list.hide()
 
         # URL input
         self.url_input = QLineEdit()
@@ -292,6 +300,37 @@ class MainWindow(QWidget):
     def show_history(self):
         self.history_window = HistoryWindow()
         self.history_window.show()
+
+    # Show downloads
+    def show_downloads(self):
+        self.file_view.show()
+        self.history_list.hide()
+        self._highlight_toolbar(self.toggle_files_btn)
+
+    def show_history_panel(self):
+        self.file_view.hide()
+        self.history_list.show()
+        self.populate_history()
+        self._highlight_toolbar(self.history_btn)
+
+    def _highlight_toolbar(self, active_btn):
+        for btn in [self.toggle_files_btn, self.history_btn]:
+            btn.setStyleSheet("")
+
+        active_btn.setStyleSheet("""
+            QPushButton {
+                    background: rgba(255, 255, 255, 60);
+                    border-radius: 6px;
+            }
+        """)
+
+    def populate_history(self):
+        self.history_list.clear()
+
+        history = load_history()
+        for item in history:
+            text = f"{item['title']} ({item['format']})"
+            self.history_list.addItem(text)
 
     # ---------------- Progress updates ----------------
     def update_progress(self, title, value):
