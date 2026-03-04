@@ -467,6 +467,10 @@ class MainWindow(QWidget):
             self.download_path,
         )
 
+        # Real completion point emitted by queue worker after yt-dlp finishes.
+        self.signals.status.emit("Download complete")
+        self.logger.info(f"Download completed: {display_title}")
+
     # ---------------- Error popup ----------------
     def show_error(self, message):
         QMessageBox.critical(self, "Download Error", message)
@@ -547,7 +551,7 @@ class MainWindow(QWidget):
             return
 
         self.logger.info(
-            f"Starting download | format={fmt} | path={self.download_path}"
+            f"Starting download | format - {fmt} | path - {self.download_path}"
         )
         self.download_btn.setEnabled(False)
         self.progress_bar.setValue(0)
@@ -559,8 +563,8 @@ class MainWindow(QWidget):
                     url, self.download_path, fmt
                     )    
 
-                self.signals.status.emit("Download complete")
-                self.logger.info("Download complete.")
+                # Added to queue/started by queue manager; completion is logged in on_video_finished.
+                self.signals.status.emit("Queued")
 
             except Exception as e:
                 self.signals.status.emit("Download failed")
