@@ -4,6 +4,7 @@ import threading
 import sys
 import os
 import subprocess
+import logging
 
 from PySide6.QtWidgets import (
     QWidget,
@@ -20,9 +21,10 @@ from PySide6.QtWidgets import (
     QListWidgetItem,
     QTreeView,
     QFileSystemModel,
+    QSplitter,
 )
 from PySide6.QtGui import QPixmap, QIcon
-from PySide6.QtCore import Qt, QObject, Signal, QTimer, QPropertyAnimation, QRect
+from PySide6.QtCore import Qt, QObject, Signal, QTimer
 
 from downloader.download import get_video_info
 from downloader.queue_manager import DownloadQueueManager
@@ -31,6 +33,8 @@ from history import add_history_entry
 from ui.history_window import HistoryWindow
 from ui.theme import DARK_THEME
 from ui.queue_item import QueueItemWidget
+from ui.log_console import LogConsole
+from utils.logger import LogHandler
 from history import load_history
 
 def resource_path(relative_path):
@@ -67,6 +71,9 @@ class MainWindow(QWidget):
 
         toolbar_layout = QHBoxLayout(self.toolbar)
         toolbar_layout.setContentsMargins(10, 5, 10, 5)
+
+        # Module logger used for in-app console messages.
+        self.logger = logging.getLogger(__name__)
 
         # Toolbar background
         self.toolbar.setStyleSheet("""
@@ -142,7 +149,7 @@ class MainWindow(QWidget):
         #double click to open file location
         self.file_view.doubleClicked.connect(self.open_selected_file)
 
-        # ----- panel -----
+        # ----- RIGHT panel (main downloader controls) -----
         self.panel = QWidget(self)
 
         # panel background only
@@ -153,7 +160,7 @@ class MainWindow(QWidget):
             }
         """)
 
-        # file panel
+        # ----- LEFT panel (downloads tree + history list) -----
         self.file_panel = QWidget(self)
 
         self.file_panel.setStyleSheet("""
@@ -167,16 +174,50 @@ class MainWindow(QWidget):
                 self.file_panel.styleSheet() + f.read()
             )
 
-        # load theme file
+        # ----- Logger panel (below LEFT panel) -----
+        # Dedicated container so the log console can sit below the downloads/history panel.
+        self.log_panel = QWidget(self)
+        self.log_panel.setStyleSheet("""
+            QWidget {
+                background-color: rgba(20, 20, 25, 190);
+                border-radius: 12px;
+            }
+        """)
+
+        self.console = LogConsole()
+
+        log_layout = QVBoxLayout(self.log_panel)
+        log_layout.setContentsMargins(8, 8, 8, 8)
+        log_layout.addWidget(self.console)
+
+        handler = LogHandler()
+        handler.setFormatter(logging.Formatter(
+            "%(asctime)s [%(levelname)s] %(message)s",
+            "%H:%M:%S"
+        ))
+
+        handler.log_signal.connect(self.console.append_log)
+
+        root_logger = logging.getLogger()
+        root_logger.addHandler(handler)
+        root_logger.setLevel(logging.INFO)
+        self.logger.info("Log console initialized.")
+
+        # Load theme onto the RIGHT panel.
         with open(resource_path("ui/themes/dark.qss"), "r") as f:
             self.panel.setStyleSheet(
                 self.panel.styleSheet() + f.read()
             )
 
-        # ----- layout on panel -----
+        # Load the same theme onto the logger panel.
+        with open(resource_path("ui/themes/dark.qss"), "r") as f:
+            self.log_panel.setStyleSheet(
+                self.log_panel.styleSheet() + f.read()
+            )
+
+        # Layout for the RIGHT panel.
         layout = QVBoxLayout(self.panel)
 
-        # layout on file panel
         file_layout = QVBoxLayout(self.file_panel)
 
         self.file_model = QFileSystemModel()
@@ -190,9 +231,15 @@ class MainWindow(QWidget):
 
         file_layout.addWidget(self.file_view)
 
+        # Explicit geometry:
+        # RIGHT panel occupies the right half.
+        # LEFT panel starts at the same top y-position (0).
+        # Logger panel sits below LEFT panel.
         self.panel.setGeometry(800, 0, 800, 900)
-        self.file_panel.setGeometry(80, 80, 600, 700)
+        self.file_panel.setGeometry(60, 45, 650, 510)
+        self.log_panel.setGeometry(60, 560, 650, 340)
 
+        # LEFT panel subview: history list, toggled with file tree view.
         self.history_list = QListWidget()
         file_layout.addWidget(self.history_list)
         self.history_list.hide()
@@ -201,6 +248,7 @@ class MainWindow(QWidget):
             self.open_history_location
         )
 
+        # RIGHT panel content starts here.
         # URL input
         self.url_input = QLineEdit()
         self.url_input.setPlaceholderText("Paste video URL here")
@@ -286,6 +334,7 @@ class MainWindow(QWidget):
         if file:
             self.settings["background"] = file
             save_settings(self.settings)
+            self.logger.info(f"Background changed: {file}")
 
             pixmap = QPixmap(file)
             self.bg_label.setPixmap(pixmap)
@@ -316,6 +365,7 @@ class MainWindow(QWidget):
             self.download_path = folder
             self.settings["download_path"] = folder
             save_settings(self.settings)
+            self.logger.info(f"Download folder set: {folder}")
 
             self.file_view.setRootIndex(self.file_model.index(folder))
 
@@ -324,12 +374,13 @@ class MainWindow(QWidget):
         self.history_window = HistoryWindow()
         self.history_window.show()
 
-    # Show downloads
+    # LEFT panel mode: show downloads tree.
     def show_downloads(self):
         self.history_list.hide()
         self.file_view.show()
         self._highlight_toolbar(self.toggle_files_btn)
 
+    # LEFT panel mode: show history list.
     def show_history_panel(self):
         self.file_view.hide()
         self.history_list.show()
@@ -384,6 +435,7 @@ class MainWindow(QWidget):
     # Open download folder
     def open_download_folder(self):
         if os.path.exists(self.download_path):
+            self.logger.info(f"Opening download folder: {self.download_path}")
             os.startfile(self.download_path)
 
     # ---------------- Progress updates ----------------
@@ -443,6 +495,7 @@ class MainWindow(QWidget):
 
         def run():
             try:
+                self.logger.info(f"Fetching video info for URL: {url}")
                 info = get_video_info(url)
                 thumb_url = info.get("thumbnail")
 
@@ -471,12 +524,17 @@ class MainWindow(QWidget):
                     self.title_label.setText(
                         f"Playlist: {title} ({count} videos)"
                     )
+                    self.logger.info(
+                        f"Fetched playlist info: {title} ({count} videos)"
+                    )
                 else:
                     title = info.get("title", "Unknown title")
                     self.title_label.setText(f"Video: {title}")
+                    self.logger.info(f"Fetched video info: {title}")
 
-            except Exception:
+            except Exception as e:
                 self.title_label.setText("Could not fetch info")
+                self.logger.error(f"Failed to fetch video info: {e}")
 
         threading.Thread(target=run, daemon=True).start()
 
@@ -488,6 +546,9 @@ class MainWindow(QWidget):
         if not url:
             return
 
+        self.logger.info(
+            f"Starting download | format={fmt} | path={self.download_path}"
+        )
         self.download_btn.setEnabled(False)
         self.progress_bar.setValue(0)
         self.signals.status.emit("Downloading...")
@@ -499,10 +560,12 @@ class MainWindow(QWidget):
                     )    
 
                 self.signals.status.emit("Download complete")
+                self.logger.info("Download complete.")
 
             except Exception as e:
                 self.signals.status.emit("Download failed")
                 self.signals.error.emit(str(e))
+                self.logger.error(f"Download failed: {e}")
 
             finally:
                 self.download_btn.setEnabled(True)

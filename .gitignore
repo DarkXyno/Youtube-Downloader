@@ -12,6 +12,7 @@ downloads/
 .history
 config.json
 *.jpg
+*.log
 
 #Updates
 ui/panels/
