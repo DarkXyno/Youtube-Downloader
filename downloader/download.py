@@ -9,6 +9,11 @@ def get_video_info(url):
     ydl_opts = {
         "quiet": True,
         "skip_download": True,
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "mweb"],
+            }
+        },
         "extract_flat": False,
         "noplaylist": False,
         "cookiefile": "cookies.txt",
@@ -75,6 +80,11 @@ def download_video(
         "cookiefile": "cookies.txt",
         "js_runtimes": {"node": {}},
         "remote_components": ["ejs:github"],
+        "extractor_args": {
+            "youtube": {
+                "player_client": ["android", "mweb"],
+            }
+        },
     }
 
     # ---------------- Format selection ----------------

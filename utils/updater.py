@@ -75,12 +75,12 @@ def _download_file(url, destination):
 
 def update_ytdlp():
     logger = logging.getLogger(__name__)
-    logger.info("Checking for yt-dlp updates...")
+    logger.info("Checking for Updates...")
 
     try:
         base_cmd = _resolve_ytdlp_command()
         local_version = _get_local_version(base_cmd)
-        logger.info(f"yt-dlp current version: {local_version or 'unknown'}")
+        logger.info(f"yt-dlp : {local_version or 'unknown'}")
 
         latest_version = _get_latest_version()
         if not latest_version:
@@ -108,11 +108,11 @@ def update_ytdlp():
         # Re-check version after replacement.
         updated_cmd = [ytdlp_exe_path]
         updated_version = _get_local_version(updated_cmd) or latest_version
-        logger.info(f"yt-dlp updated successfully: {updated_version}")
+        logger.info(f"yt-dlp updated successfully - {updated_version}")
     except FileNotFoundError:
         logger.error("yt-dlp not found for auto-update.")
     except Exception as e:
-        logger.error(f"yt-dlp auto-update error: {e}")
+        logger.error(f"yt-dlp auto-update error - {e}")
 
 
 def start_updater():
